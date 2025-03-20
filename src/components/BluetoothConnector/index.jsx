@@ -17,20 +17,28 @@ const BluetoothConnector = () => {
     try {
       const selectedDevice = await navigator.bluetooth.requestDevice({
         acceptAllDevices: true,
-        optionalServices: [SERVICE_UUID],
+        optionalServices: [SERVICE_UUID] // Asegura que se busque el servicio correcto
       });
-
-      setDeviceName(selectedDevice.name || "Dispositivo sin nombre");
+  
+      const server = await selectedDevice.gatt.connect();
+      console.log("Conectado al servidor GATT");
+  
+      const service = await server.getPrimaryService(SERVICE_UUID);
+      console.log("Servicio GATT encontrado:", service);
+  
+      const rxCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID_RX);
+      setRxCharacteristic(rxCharacteristic);
+  
+      selectedDevice.addEventListener("gattserverdisconnected", () => {
+        console.log("Dispositivo desconectado");
+        setIsConnected(false);
+      });
+  
       setDevice(selectedDevice);
-
-      selectedDevice.addEventListener("gattserverdisconnected", handleDisconnect);
-
-      await connectToGatt(selectedDevice);
       setIsConnected(true);
-      console.log("Conectado a", selectedDevice.name);
     } catch (error) {
+      console.error("Error en la conexión GATT:", error);
       alert("Error al conectar: " + error.message);
-      console.error(error);
     }
   };
 
