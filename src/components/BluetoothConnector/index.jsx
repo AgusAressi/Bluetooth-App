@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const BluetoothConnector = () => {
   const [deviceName, setDeviceName] = useState(null);
@@ -8,33 +8,29 @@ const BluetoothConnector = () => {
   const [rxCharacteristic, setRxCharacteristic] = useState(null);
   const [txCharacteristic, setTxCharacteristic] = useState(null);
 
-  const SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-  const CHARACTERISTIC_UUID_RX = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // Para escribir
-  const CHARACTERISTIC_UUID_TX = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // Para recibir datos
+  const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+  const CHARACTERISTIC_UUID_RX = "beb5483e-36e1-4688-b7f5-ea07361b26a8"; // Para escribir
+  const CHARACTERISTIC_UUID_TX = "beb5483e-36e1-4688-b7f5-ea07361b26a8"; // Para recibir datos
 
-  // Conectar a un dispositivo Bluetooth
+  useEffect(() => {
+    if (device) {
+      device.addEventListener("gattserverdisconnected", handleDisconnect);
+      return () => {
+        device.removeEventListener("gattserverdisconnected", handleDisconnect);
+      };
+    }
+  }, [device]);
+
   const connectToDevice = async () => {
     try {
       const selectedDevice = await navigator.bluetooth.requestDevice({
         acceptAllDevices: true,
-        optionalServices: [SERVICE_UUID] // Asegura que se busque el servicio correcto
+        optionalServices: [SERVICE_UUID]
       });
-  
-      const server = await selectedDevice.gatt.connect();
-      console.log("Conectado al servidor GATT");
-  
-      const service = await server.getPrimaryService(SERVICE_UUID);
-      console.log("Servicio GATT encontrado:", service);
-  
-      const rxCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID_RX);
-      setRxCharacteristic(rxCharacteristic);
-  
-      selectedDevice.addEventListener("gattserverdisconnected", () => {
-        console.log("Dispositivo desconectado");
-        setIsConnected(false);
-      });
-  
+
+      setDeviceName(selectedDevice.name);
       setDevice(selectedDevice);
+      await connectToGatt(selectedDevice);
       setIsConnected(true);
     } catch (error) {
       console.error("Error en la conexión GATT:", error);
@@ -42,30 +38,17 @@ const BluetoothConnector = () => {
     }
   };
 
-  // Manejar la desconexión del dispositivo
-  const handleDisconnect = () => {
-    setIsConnected(false);
-    setDevice(null);
-    setDeviceName(null);
-    setRxCharacteristic(null);
-    setTxCharacteristic(null);
-    alert("El dispositivo se ha desconectado.");
-  };
-
-  // Conectar al GATT Server y obtener características
   const connectToGatt = async (selectedDevice) => {
     try {
       const server = await selectedDevice.gatt.connect();
       const service = await server.getPrimaryService(SERVICE_UUID);
 
-      // Obtener características RX (escritura) y TX (lectura)
       const rxChar = await service.getCharacteristic(CHARACTERISTIC_UUID_RX);
       const txChar = await service.getCharacteristic(CHARACTERISTIC_UUID_TX);
 
       setRxCharacteristic(rxChar);
       setTxCharacteristic(txChar);
 
-      // Suscribirse a notificaciones para recibir datos
       await txChar.startNotifications();
       txChar.addEventListener("characteristicvaluechanged", handleDataReceived);
     } catch (error) {
@@ -73,7 +56,6 @@ const BluetoothConnector = () => {
     }
   };
 
-  // Manejar la recepción de datos desde el ESP32
   const handleDataReceived = (event) => {
     const value = event.target.value;
     const received = new TextDecoder().decode(value);
@@ -81,7 +63,6 @@ const BluetoothConnector = () => {
     console.log("Datos recibidos:", received);
   };
 
-  // Enviar datos al dispositivo
   const sendData = async (message) => {
     if (rxCharacteristic) {
       try {
@@ -95,11 +76,19 @@ const BluetoothConnector = () => {
     }
   };
 
-  // Desconectar el dispositivo manualmente
   const disconnectDevice = () => {
     if (device && device.gatt.connected) {
       device.gatt.disconnect();
     }
+  };
+
+  const handleDisconnect = () => {
+    setIsConnected(false);
+    setDevice(null);
+    setDeviceName(null);
+    setRxCharacteristic(null);
+    setTxCharacteristic(null);
+    alert("El dispositivo se ha desconectado.");
   };
 
   return (
@@ -119,7 +108,7 @@ const BluetoothConnector = () => {
           </button>
         </div>
       ) : (
-        <button onClick={connectToDevice} className="px-6 py-2 bg-blue-500 text-white rounded-lg">
+        <button onClick={connectToDevice} className="mt-3 px-6 py-2 bg-blue-500 text-white rounded-lg">
           Buscar dispositivos
         </button>
       )}
